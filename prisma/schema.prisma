@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  username     String         @unique
+  email        String         @unique
+  passwordHash String
+  address      String?
+  balance      Decimal        @default(1000) @db.Decimal(18, 8)
+  createdAt    DateTime       @default(now())
+  games        GameRound[]
+  transactions Transaction[]
+}
+
+model GameRound {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bet            Decimal     @db.Decimal(18, 8)
+  mines          Int
+  boardSize      Int         @default(5)
+  status         GameStatus  @default(ACTIVE)
+  serverSeed     String
+  serverSeedHash String
+  clientSeed     String
+  multiplier     Decimal     @default(1) @db.Decimal(18, 8)
+  payout         Decimal?    @db.Decimal(18, 8)
+  createdAt      DateTime    @default(now())
+  reveals        Reveal[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model Reveal {
+  id        String    @id @default(cuid())
+  roundId   String
+  round     GameRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  tileIndex Int
+  isMine    Boolean
+  createdAt DateTime  @default(now())
+
+  @@unique([roundId, tileIndex])
+  @@index([roundId, createdAt])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TxType
+  amount    Decimal  @db.Decimal(18, 8)
+  roundId   String?
+  idempotencyKey String? @unique
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+enum GameStatus {
+  ACTIVE
+  WON
+  LOST
+}
+
+enum TxType {
+  BET
+  WIN
+  DEPOSIT
+  WITHDRAW
+}
