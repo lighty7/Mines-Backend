@@ -1,0 +1,67 @@
+name: CD
+
+on:
+  push:
+    branches: [main, dev]
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mines
+          POSTGRES_PASSWORD: mines
+          POSTGRES_DB: mines
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mines"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mines:mines@localhost:5432/mines
+      JWT_SECRET: ci-only-jwt-secret-that-is-at-least-thirty-two-characters
+      BCRYPT_ROUNDS: "10"
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+      - name: Run tests
+        run: npm test
+
+  deploy-prod:
+    name: Deploy to production (main)
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render production deploy hook
+        run: curl -fsS -X POST "${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}"
+
+  deploy-staging:
+    name: Deploy to staging (dev)
+    if: github.ref == 'refs/heads/dev'
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render staging deploy hook
+        run: curl -fsS -X POST "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}"
