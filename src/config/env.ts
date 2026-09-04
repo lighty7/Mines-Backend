@@ -17,6 +17,15 @@ const envSchema = z.object({
     .default('http://localhost:5173')
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(10),
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.coerce.number().int().default(465),
+  SMTP_SECURE: z
+    .string()
+    .default('true')
+    .transform((v) => v === 'true' || v === '1'),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  SMTP_FROM: z.string().default('Mines Game <yashwanth.hp.dev@gmail.com>'),
 })
 
 const parsed = envSchema.safeParse(process.env)
