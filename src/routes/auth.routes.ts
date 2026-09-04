@@ -26,6 +26,16 @@ const loginSchema = z.object({
   password: z.string().min(1).max(72),
 })
 
+const sendOtpSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(120),
+  reason: z.string().trim().max(64).optional(),
+})
+
+const verifyOtpSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(120),
+  code: z.string().trim().length(6, 'OTP must be exactly 6 digits'),
+})
+
 authRouter.post(
   '/register',
   validateBody(registerSchema),
@@ -48,5 +58,28 @@ authRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     res.json({ user: await auth.me(req.userId!) })
+  }),
+)
+
+authRouter.post(
+  '/send-otp',
+  validateBody(sendOtpSchema),
+  asyncHandler(async (_req, res) => {
+    const { email, reason } = res.locals.body
+    res.json(await auth.sendOtp(email, reason))
+  }),
+)
+
+authRouter.post(
+  '/verify-otp',
+  validateBody(verifyOtpSchema),
+  asyncHandler(async (_req, res) => {
+    const { email, code } = res.locals.body
+    const valid = auth.verifyOtp(email, code)
+    if (!valid) {
+      res.status(400).json({ valid: false, error: 'Invalid or expired OTP code' })
+      return
+    }
+    res.json({ valid: true, message: 'OTP verified successfully' })
   }),
 )
