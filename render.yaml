@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: mines-backend
+    runtime: node
+    plan: free
+    branch: main
+    healthCheckPath: /health
+    buildCommand: npm ci && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: BCRYPT_ROUNDS
+        value: "10"
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: web
+    name: mines-backend-staging
+    runtime: node
+    plan: free
+    branch: dev
+    healthCheckPath: /health
+    buildCommand: npm ci && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: BCRYPT_ROUNDS
+        value: "10"
+      - key: CORS_ORIGINS
+        sync: false
