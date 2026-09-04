@@ -26,6 +26,7 @@ model GameRound {
   bet            Decimal     @db.Decimal(18, 8)
   mines          Int
   boardSize      Int         @default(5)
+  minePositions  Int[]       // server-authoritative mine indices, never sent to client
   status         GameStatus  @default(ACTIVE)
   serverSeed     String
   serverSeedHash String

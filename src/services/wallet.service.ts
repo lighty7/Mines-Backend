@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import { InsufficientBalanceError } from '../lib/errors'
 import { assertNonNegative, assertPositive, requiredDecimal, toDecimal } from '../utils/money'
 
