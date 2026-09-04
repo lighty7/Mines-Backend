@@ -80,6 +80,27 @@ export class AuthService {
     return match
   }
 
+  async resetPassword(email: string, code: string, newPassword: string): Promise<{ message: string }> {
+    const normalizedEmail = email.trim().toLowerCase()
+    const valid = this.verifyOtp(normalizedEmail, code)
+    if (!valid) {
+      throw new UnauthorizedError('Invalid or expired verification code')
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+    if (!user) {
+      throw new NotFoundError('No user found with this email')
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS)
+    await prisma.user.update({
+      where: { email: normalizedEmail },
+      data: { passwordHash },
+    })
+
+    return { message: 'Password reset successfully. You can now sign in.' }
+  }
+
   async login(input: LoginInput) {
     const email = input.email.trim().toLowerCase()
     const user = await prisma.user.findUnique({ where: { email } })

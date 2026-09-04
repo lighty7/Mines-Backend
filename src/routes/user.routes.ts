@@ -5,7 +5,7 @@ import { ConflictError } from '../lib/errors'
 import { prisma } from '../lib/prisma'
 import { asyncHandler } from '../middleware/async-handler'
 import { requireAuth } from '../middleware/auth'
-import { validateBody } from '../middleware/validate'
+import { validateBody, validateQuery } from '../middleware/validate'
 import { AuthService } from '../services/auth.service'
 
 const auth = new AuthService()
@@ -47,5 +47,38 @@ userRouter.put(
       }
       throw error
     }
+  }),
+)
+
+const transactionsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+})
+
+userRouter.get(
+  '/transactions',
+  validateQuery(transactionsQuery),
+  asyncHandler(async (req, res) => {
+    const limit = res.locals.query.limit
+    const txs = await prisma.transaction.findMany({
+      where: { userId: req.userId! },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        type: true,
+        amount: true,
+        roundId: true,
+        createdAt: true,
+      },
+    })
+    res.json({
+      transactions: txs.map((t) => ({
+        id: t.id,
+        type: t.type,
+        amount: t.amount.toNumber(),
+        roundId: t.roundId,
+        createdAt: t.createdAt.toISOString(),
+      })),
+    })
   }),
 )

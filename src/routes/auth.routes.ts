@@ -36,6 +36,12 @@ const verifyOtpSchema = z.object({
   code: z.string().trim().length(6, 'OTP must be exactly 6 digits'),
 })
 
+const resetPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(120),
+  code: z.string().trim().length(6, 'OTP must be exactly 6 digits'),
+  newPassword: z.string().min(6, 'password must be at least 6 characters').max(72),
+})
+
 authRouter.post(
   '/register',
   validateBody(registerSchema),
@@ -81,5 +87,14 @@ authRouter.post(
       return
     }
     res.json({ valid: true, message: 'OTP verified successfully' })
+  }),
+)
+
+authRouter.post(
+  '/reset-password',
+  validateBody(resetPasswordSchema),
+  asyncHandler(async (_req, res) => {
+    const { email, code, newPassword } = res.locals.body
+    res.json(await auth.resetPassword(email, code, newPassword))
   }),
 )
