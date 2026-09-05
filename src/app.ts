@@ -4,6 +4,7 @@ import { rateLimit } from 'express-rate-limit'
 import helmet from 'helmet'
 import { env } from './config/env'
 import { errorHandler } from './middleware/error'
+import { adminRouter } from './routes/admin.routes'
 import { authRouter } from './routes/auth.routes'
 import { gameRouter } from './routes/game.routes'
 import { leaderboardRouter } from './routes/leaderboard.routes'
@@ -57,6 +58,7 @@ export function createApp(): Express {
 
   app.use('/api/user', userRouter)
   app.use('/api/leaderboard', leaderboardRouter)
+  app.use('/api/admin', adminRouter)
 
   app.use(errorHandler)
 

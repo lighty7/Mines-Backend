@@ -53,6 +53,14 @@ export class GameService {
    * the publicly known settings.
    */
   async startRound(input: StartRoundInput) {
+    const player = await prisma.user.findUnique({ where: { id: input.userId } })
+    if (!player) throw new NotFoundError('Player not found')
+    if (player.isBanned) {
+      throw new ForbiddenError(
+        player.bannedReason ? `Account suspended: ${player.bannedReason}` : 'Account is suspended'
+      )
+    }
+
     const bet = requiredDecimal(input.bet)
     assertPositive(bet, 'bet')
     const boardSize = normalizeBoardSize(input.boardSize)
