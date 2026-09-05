@@ -53,6 +53,16 @@ adminRouter.get(
   })
 )
 
+// 2b. Executive Analytics Dashboard Data
+adminRouter.get(
+  '/dashboard',
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    const data = await adminService.getDashboardAnalytics()
+    res.json(data)
+  })
+)
+
 // 3. Search & List Players
 adminRouter.get(
   '/users',
