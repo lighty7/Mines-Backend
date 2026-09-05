@@ -14,10 +14,26 @@ export function createApp(): Express {
 
   app.set('trust proxy', 1)
   app.use(helmet())
-  app.use(cors({ origin: env.CORS_ORIGINS, credentials: true }))
+  const allowedOrigins = Array.isArray(env.CORS_ORIGINS) ? env.CORS_ORIGINS : [env.CORS_ORIGINS]
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true)
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+          return callback(null, true)
+        }
+        if (origin.endsWith('.vercel.app') || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+          return callback(null, true)
+        }
+        return callback(null, false)
+      },
+      credentials: true,
+    })
+  )
   app.use(express.json({ limit: '32kb' }))
 
-  app.get('/health', (_req, res) => {
+  app.get(['/health', '/api/health'], (_req, res) => {
     res.json({ status: 'ok' })
   })
 
