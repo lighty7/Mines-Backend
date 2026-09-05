@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { Prisma } from '@prisma/client'
 import { env } from '../config/env'
-import { ConflictError, NotFoundError, UnauthorizedError } from '../lib/errors'
+import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors'
 import { prisma } from '../lib/prisma'
 import { emailService } from './email.service'
 
@@ -113,12 +113,21 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password')
     }
 
+    if (user.isBanned) {
+      throw new ForbiddenError(
+        user.bannedReason ? `Account suspended: ${user.bannedReason}` : 'Account suspended. Contact support.'
+      )
+    }
+
     return { user: this.toPublicUser(user), token: this.issueToken(user.id) }
   }
 
   async me(userId: string) {
     const user = await prisma.user.findUnique({ where: { id: userId } })
     if (!user) throw new NotFoundError('User not found')
+    if (user.isBanned) {
+      throw new ForbiddenError('Account suspended')
+    }
     return this.toPublicUser(user)
   }
 
@@ -142,12 +151,16 @@ export class AuthService {
     email: string
     balance: Prisma.Decimal
     address: string | null
+    role?: string
+    isBanned?: boolean
     createdAt: Date
   }) {
     return {
       id: user.id,
       username: user.username,
       email: user.email,
+      role: user.role || 'USER',
+      isBanned: user.isBanned ?? false,
       balance: user.balance.toNumber(),
       address: user.address,
       createdAt: user.createdAt,
