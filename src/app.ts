@@ -15,23 +15,39 @@ export function createApp(): Express {
 
   app.set('trust proxy', 1)
   app.use(helmet())
-  const allowedOrigins = Array.isArray(env.CORS_ORIGINS) ? env.CORS_ORIGINS : [env.CORS_ORIGINS]
-
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin) return callback(null, true)
-        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-          return callback(null, true)
-        }
-        if (origin.endsWith('.vercel.app') || origin.includes('localhost') || origin.includes('127.0.0.1')) {
-          return callback(null, true)
-        }
-        return callback(null, false)
-      },
-      credentials: true,
-    })
+  const allowedOrigins = (Array.isArray(env.CORS_ORIGINS) ? env.CORS_ORIGINS : [env.CORS_ORIGINS]).map((o) =>
+    o.replace(/\/+$/, '').toLowerCase()
   )
+
+  const corsOptions: cors.CorsOptions = {
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      const normalized = origin.replace(/\/+$/, '').toLowerCase()
+      if (
+        allowedOrigins.includes(origin) ||
+        allowedOrigins.includes(normalized) ||
+        allowedOrigins.includes('*')
+      ) {
+        return callback(null, true)
+      }
+      if (
+        normalized.endsWith('.vercel.app') ||
+        normalized.endsWith('.duckdns.org') ||
+        normalized.includes('duckdns.org') ||
+        normalized.includes('localhost') ||
+        normalized.includes('127.0.0.1')
+      ) {
+        return callback(null, true)
+      }
+      return callback(null, false)
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-idempotency-key', 'x-admin-key'],
+  }
+
+  app.use(cors(corsOptions))
+  app.options('*', cors(corsOptions))
   app.use(express.json({ limit: '32kb' }))
 
   app.get(['/health', '/api/health'], (_req, res) => {
