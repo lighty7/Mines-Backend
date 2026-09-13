@@ -18,8 +18,12 @@ model User {
   bannedReason String?
   balance      Decimal        @default(1000) @db.Decimal(18, 8)
   createdAt    DateTime       @default(now())
-  games        GameRound[]
-  transactions Transaction[]
+  games           GameRound[]
+  transactions    Transaction[]
+  slotRounds      SlotRound[]
+  rouletteRounds  RouletteRound[]
+  blackjackRounds BlackjackRound[]
+  coinFlipRounds  CoinFlipRound[]
 }
 
 model GameRound {
@@ -68,6 +72,78 @@ model Transaction {
   @@index([userId, createdAt])
 }
 
+model SlotRound {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bet            Decimal   @db.Decimal(18, 8)
+  payout         Decimal   @default(0) @db.Decimal(18, 8)
+  multiplier     Decimal   @default(0) @db.Decimal(18, 8)
+  grid           Json      // 5x3 number array representing symbol IDs
+  winningLines   Json      // Array of { lineIndex, symbol, matchCount, payout }
+  isFreeSpin     Boolean   @default(false)
+  freeSpinsWon   Int       @default(0)
+  serverSeed     String
+  serverSeedHash String
+  clientSeed     String
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model RouletteRound {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalBet       Decimal   @db.Decimal(18, 8)
+  winningNumber  Int       // 0 to 36
+  bets           Json      // Array of { type, numbers: number[], amount: number }
+  payout         Decimal   @default(0) @db.Decimal(18, 8)
+  multiplier     Decimal   @default(0) @db.Decimal(18, 8)
+  serverSeed     String
+  serverSeedHash String
+  clientSeed     String
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model BlackjackRound {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bet            Decimal    @db.Decimal(18, 8)
+  playerHands    Json       // Array of { cards: string[], bet: number, status: string, score: number }
+  dealerHand     Json       // { cards: string[], score: number, hidden: boolean }
+  currentHandIdx Int        @default(0)
+  status         GameStatus @default(ACTIVE)
+  payout         Decimal    @default(0) @db.Decimal(18, 8)
+  serverSeed     String
+  serverSeedHash String
+  clientSeed     String
+  createdAt      DateTime   @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model CoinFlipRound {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bet            Decimal    @db.Decimal(18, 8)
+  flips          Json       // Array of { guess: 'HEADS'|'TAILS', outcome: 'HEADS'|'TAILS', multiplier: number }
+  streak         Int        @default(0)
+  multiplier     Decimal    @default(1) @db.Decimal(18, 8)
+  status         GameStatus @default(ACTIVE)
+  payout         Decimal?   @db.Decimal(18, 8)
+  serverSeed     String
+  serverSeedHash String
+  clientSeed     String
+  createdAt      DateTime   @default(now())
+
+  @@index([userId, createdAt])
+}
+
 enum Role {
   USER
   ADMIN
@@ -77,6 +153,7 @@ enum GameStatus {
   ACTIVE
   WON
   LOST
+  PUSH
 }
 
 enum TxType {
