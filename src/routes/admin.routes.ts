@@ -33,6 +33,20 @@ const balanceSchema = z.object({
   reason: z.string().max(200).optional(),
 })
 
+const activeRoundsQuerySchema = z.object({
+  gameType: z.enum(['ALL', 'mines', 'coinflip', 'blackjack']).optional().default('ALL'),
+})
+
+const stopRoundSchema = z.object({
+  action: z.enum(['REFUND', 'CASHOUT']).optional().default('REFUND'),
+  reason: z.string().max(200).optional().default('Cancelled by administrator'),
+})
+
+const stopAllRoundsSchema = z.object({
+  gameType: z.enum(['ALL', 'mines', 'coinflip', 'blackjack']).optional().default('ALL'),
+  reason: z.string().max(200).optional().default('Emergency stop by administrator'),
+})
+
 // 1. Admin Login
 adminRouter.post(
   '/login',
@@ -111,6 +125,43 @@ adminRouter.delete(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const result = await adminService.deleteUser(req.params.id)
+    res.json(result)
+  })
+)
+
+// 7. Get All Live Active Rounds Across Casino Games
+adminRouter.get(
+  '/active-rounds',
+  requireAdmin,
+  validateQuery(activeRoundsQuerySchema),
+  asyncHandler(async (req, res) => {
+    const gameType = (req.query.gameType as any) || 'ALL'
+    const rounds = await adminService.getAllActiveRounds(gameType)
+    res.json({ rounds, total: rounds.length })
+  })
+)
+
+// 8. Stop / Force Cancel / Force Cashout a Single Active Round
+adminRouter.post(
+  '/rounds/:gameType/:roundId/stop',
+  requireAdmin,
+  validateBody(stopRoundSchema),
+  asyncHandler(async (req, res) => {
+    const { gameType, roundId } = req.params as { gameType: any; roundId: string }
+    const { action, reason } = req.body
+    const result = await adminService.stopRound(gameType, roundId, action, reason)
+    res.json(result)
+  })
+)
+
+// 9. Emergency Stop All Active Rounds
+adminRouter.post(
+  '/rounds/stop-all',
+  requireAdmin,
+  validateBody(stopAllRoundsSchema),
+  asyncHandler(async (req, res) => {
+    const { gameType, reason } = req.body
+    const result = await adminService.stopAllActiveRounds(gameType, reason)
     res.json(result)
   })
 )

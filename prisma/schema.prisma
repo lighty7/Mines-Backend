@@ -154,6 +154,7 @@ enum GameStatus {
   WON
   LOST
   PUSH
+  CANCELLED
 }
 
 enum TxType {
@@ -162,4 +163,5 @@ enum TxType {
   DEPOSIT
   WITHDRAW
   ADMIN_ADJUST
+  REFUND
 }

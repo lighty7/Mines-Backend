@@ -2,9 +2,33 @@ import { Prisma } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env'
-import { ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors'
+import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors'
 import { prisma } from '../lib/prisma'
 import { multiplierAt, potentialWin } from '../engine/mines.engine'
+import { WalletService } from './wallet.service'
+
+const wallet = new WalletService()
+
+export type AdminGameType = 'mines' | 'coinflip' | 'blackjack'
+
+export interface UnifiedActiveRound {
+  id: string
+  gameType: AdminGameType
+  userId: string
+  username: string
+  email: string
+  bet: number
+  stateSummary: string
+  multiplier: number
+  potentialWin: number
+  createdAt: string
+  mines?: number
+  boardSize?: number
+  revealedCount?: number
+  streak?: number
+  cardsCount?: number
+  handScore?: number
+}
 
 export interface AdminStats {
   activePlayersCount: number
@@ -17,18 +41,7 @@ export interface AdminStats {
   totalRounds: number
   wonRounds: number
   lostRounds: number
-  activeRounds: Array<{
-    id: string
-    userId: string
-    username: string
-    bet: number
-    mines: number
-    boardSize: number
-    revealedCount: number
-    multiplier: number
-    potentialWin: number
-    createdAt: string
-  }>
+  activeRounds: UnifiedActiveRound[]
 }
 
 export interface AdminDashboardData {
@@ -81,18 +94,7 @@ export interface AdminDashboardData {
     amount: number
     createdAt: string
   }>
-  activeRounds: Array<{
-    id: string
-    userId: string
-    username: string
-    bet: number
-    mines: number
-    boardSize: number
-    revealedCount: number
-    multiplier: number
-    potentialWin: number
-    createdAt: string
-  }>
+  activeRounds: UnifiedActiveRound[]
 }
 
 export class AdminService {
@@ -183,45 +185,14 @@ export class AdminService {
       prisma.gameRound.count({ where: { status: 'LOST' } }),
     ])
 
-    // Batch 4: Active player count & active rounds feed
-    const [activePlayersCount, activeRoundsRaw] = await Promise.all([
-      prisma.gameRound.count({
-        where: { status: 'ACTIVE', createdAt: { gte: fifteenMinutesAgo } },
-      }),
-      prisma.gameRound.findMany({
-        where: { status: 'ACTIVE' },
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: { select: { username: true, email: true } },
-          reveals: { select: { tileIndex: true, isMine: true } },
-        },
-      }),
-    ])
+    // Batch 4: Active players & unified active rounds feed
+    const activeRounds = await this.getAllActiveRounds()
+    const activePlayersCount = new Set(activeRounds.map((r) => r.userId)).size
 
     const mainPot = mainPotAgg._sum.balance ? Number(mainPotAgg._sum.balance) : 0
     const totalWagered = wageredAgg._sum.bet ? Number(wageredAgg._sum.bet) : 0
     const totalPayout = payoutAgg._sum.payout ? Number(payoutAgg._sum.payout) : 0
     const houseProfit = totalWagered - totalPayout
-
-    const activeRounds = activeRoundsRaw.map((r) => {
-      const revealedCount = r.reveals.filter((rev) => !rev.isMine).length
-      const mult = multiplierAt(r.mines, revealedCount, r.boardSize)
-      const potential = potentialWin(Number(r.bet), r.mines, revealedCount, r.boardSize)
-
-      return {
-        id: r.id,
-        userId: r.userId,
-        username: r.user.username,
-        bet: Number(r.bet),
-        mines: r.mines,
-        boardSize: r.boardSize,
-        revealedCount,
-        multiplier: mult,
-        potentialWin: potential,
-        createdAt: r.createdAt.toISOString(),
-      }
-    })
 
     return {
       activePlayersCount,
@@ -298,8 +269,8 @@ export class AdminService {
       }),
     ])
 
-    // Batch 5: 7-day rounds, recent transactions & active rounds
-    const [last7DaysRounds, recentTxRaw, activeRoundsRaw] = await Promise.all([
+    // Batch 5: 7-day rounds, recent transactions & unified active rounds
+    const [last7DaysRounds, recentTxRaw, activeRounds] = await Promise.all([
       prisma.gameRound.findMany({
         where: { createdAt: { gte: sevenDaysAgo } },
         select: { bet: true, payout: true, status: true, createdAt: true },
@@ -309,15 +280,7 @@ export class AdminService {
         orderBy: { createdAt: 'desc' },
         include: { user: { select: { username: true } } },
       }),
-      prisma.gameRound.findMany({
-        where: { status: 'ACTIVE' },
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: { select: { username: true, email: true } },
-          reveals: { select: { tileIndex: true, isMine: true } },
-        },
-      }),
+      this.getAllActiveRounds(),
     ])
 
     const mainPot = mainPotAgg._sum.balance ? Number(mainPotAgg._sum.balance) : 0
@@ -377,23 +340,6 @@ export class AdminService {
           }
         : null
 
-    const activeRounds = activeRoundsRaw.map((r) => {
-      const revealedCount = r.reveals.filter((rev) => !rev.isMine).length
-      const mult = multiplierAt(r.mines, revealedCount, r.boardSize)
-      const potential = potentialWin(Number(r.bet), r.mines, revealedCount, r.boardSize)
-      return {
-        id: r.id,
-        userId: r.userId,
-        username: r.user.username,
-        bet: Number(r.bet),
-        mines: r.mines,
-        boardSize: r.boardSize,
-        revealedCount,
-        multiplier: mult,
-        potentialWin: potential,
-        createdAt: r.createdAt.toISOString(),
-      }
-    })
 
     const recentActivity = recentTxRaw.map((tx) => ({
       id: tx.id,
@@ -598,6 +544,302 @@ export class AdminService {
 
     await prisma.user.delete({ where: { id: userId } })
     return { success: true, message: `Player ${user.username} deleted successfully` }
+  }
+
+  /**
+   * Aggregates all live active rounds across all casino games (Mines, Coin Flip, Blackjack)
+   */
+  async getAllActiveRounds(gameTypeFilter?: AdminGameType | 'ALL'): Promise<UnifiedActiveRound[]> {
+    const results: UnifiedActiveRound[] = []
+
+    // 1. Mines
+    if (!gameTypeFilter || gameTypeFilter === 'ALL' || gameTypeFilter === 'mines') {
+      const minesRounds = await prisma.gameRound.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: {
+          user: { select: { username: true, email: true } },
+          reveals: { select: { tileIndex: true, isMine: true } },
+        },
+      })
+
+      for (const r of minesRounds) {
+        const revealedCount = r.reveals.filter((rev) => !rev.isMine).length
+        const mult = multiplierAt(r.mines, revealedCount, r.boardSize)
+        const potential = potentialWin(Number(r.bet), r.mines, revealedCount, r.boardSize)
+
+        results.push({
+          id: r.id,
+          gameType: 'mines',
+          userId: r.userId,
+          username: r.user.username,
+          email: r.user.email,
+          bet: Number(r.bet),
+          stateSummary: `${revealedCount} gems / ${r.mines} mines (${r.boardSize}x${r.boardSize})`,
+          multiplier: mult,
+          potentialWin: potential,
+          createdAt: r.createdAt.toISOString(),
+          mines: r.mines,
+          boardSize: r.boardSize,
+          revealedCount,
+        })
+      }
+    }
+
+    // 2. Coin Flip
+    if (!gameTypeFilter || gameTypeFilter === 'ALL' || gameTypeFilter === 'coinflip') {
+      const coinRounds = await prisma.coinFlipRound.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: {
+          user: { select: { username: true, email: true } },
+        },
+      })
+
+      for (const r of coinRounds) {
+        const mult = Number(r.multiplier)
+        const potential = Math.round(Number(r.bet) * mult * 100) / 100
+
+        results.push({
+          id: r.id,
+          gameType: 'coinflip',
+          userId: r.userId,
+          username: r.user.username,
+          email: r.user.email,
+          bet: Number(r.bet),
+          stateSummary: `Streak ${r.streak} (${mult.toFixed(2)}x)`,
+          multiplier: mult,
+          potentialWin: potential,
+          createdAt: r.createdAt.toISOString(),
+          streak: r.streak,
+        })
+      }
+    }
+
+    // 3. Blackjack
+    if (!gameTypeFilter || gameTypeFilter === 'ALL' || gameTypeFilter === 'blackjack') {
+      const bjRounds = await prisma.blackjackRound.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: {
+          user: { select: { username: true, email: true } },
+        },
+      })
+
+      for (const r of bjRounds) {
+        const playerHands = (r.playerHands as any[]) || []
+        const hand = playerHands[0]
+        const score = hand?.score ?? '?'
+        const cardsCount = hand?.cards?.length ?? 2
+
+        results.push({
+          id: r.id,
+          gameType: 'blackjack',
+          userId: r.userId,
+          username: r.user.username,
+          email: r.user.email,
+          bet: Number(r.bet),
+          stateSummary: `Hand: ${cardsCount} cards (Score: ${score})`,
+          multiplier: 2.0,
+          potentialWin: Number(r.bet) * 2,
+          createdAt: r.createdAt.toISOString(),
+          cardsCount,
+          handScore: typeof score === 'number' ? score : undefined,
+        })
+      }
+    }
+
+    // Sort by createdAt descending
+    results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return results
+  }
+
+  /**
+   * Stop / Force-Cancel / Force-Cashout a Live Active Round
+   */
+  async stopRound(
+    gameType: AdminGameType,
+    roundId: string,
+    action: 'REFUND' | 'CASHOUT' = 'REFUND',
+    reason = 'Cancelled by administrator'
+  ) {
+    return prisma.$transaction(async (tx) => {
+      if (gameType === 'mines') {
+        const round = await tx.gameRound.findUnique({
+          where: { id: roundId },
+          include: { reveals: true, user: { select: { username: true } } },
+        })
+        if (!round) throw new NotFoundError('Mines round not found')
+        if (round.status !== 'ACTIVE') throw new ConflictError('Round is not currently active')
+
+        let payout = 0
+        let newStatus: 'CANCELLED' | 'WON' = 'CANCELLED'
+        let txType: 'REFUND' | 'WIN' = 'REFUND'
+
+        if (action === 'CASHOUT') {
+          const revealedGems = round.reveals.filter((rev) => !rev.isMine).length
+          payout = potentialWin(Number(round.bet), round.mines, revealedGems, round.boardSize)
+          newStatus = 'WON'
+          txType = 'WIN'
+        } else {
+          payout = Number(round.bet)
+          newStatus = 'CANCELLED'
+          txType = 'REFUND'
+        }
+
+        await tx.gameRound.update({
+          where: { id: roundId },
+          data: {
+            status: newStatus,
+            payout: new Prisma.Decimal(payout),
+          },
+        })
+
+        if (payout > 0) {
+          await wallet.credit(tx, round.userId, new Prisma.Decimal(payout), {
+            type: txType,
+            roundId,
+          })
+        }
+
+        return {
+          success: true,
+          roundId,
+          gameType,
+          username: round.user.username,
+          userId: round.userId,
+          action,
+          amountPaidOrRefunded: payout,
+          status: newStatus,
+          reason,
+        }
+      }
+
+      if (gameType === 'coinflip') {
+        const round = await tx.coinFlipRound.findUnique({
+          where: { id: roundId },
+          include: { user: { select: { username: true } } },
+        })
+        if (!round) throw new NotFoundError('Coin Flip round not found')
+        if (round.status !== 'ACTIVE') throw new ConflictError('Round is not currently active')
+
+        let payout = 0
+        let newStatus: 'CANCELLED' | 'WON' = 'CANCELLED'
+        let txType: 'REFUND' | 'WIN' = 'REFUND'
+
+        if (action === 'CASHOUT' && round.streak > 0) {
+          payout = Math.round(Number(round.bet) * Number(round.multiplier) * 100) / 100
+          newStatus = 'WON'
+          txType = 'WIN'
+        } else {
+          payout = Number(round.bet)
+          newStatus = 'CANCELLED'
+          txType = 'REFUND'
+        }
+
+        await tx.coinFlipRound.update({
+          where: { id: roundId },
+          data: {
+            status: newStatus,
+            payout: new Prisma.Decimal(payout),
+          },
+        })
+
+        if (payout > 0) {
+          await wallet.credit(tx, round.userId, new Prisma.Decimal(payout), {
+            type: txType,
+            roundId,
+          })
+        }
+
+        return {
+          success: true,
+          roundId,
+          gameType,
+          username: round.user.username,
+          userId: round.userId,
+          action,
+          amountPaidOrRefunded: payout,
+          status: newStatus,
+          reason,
+        }
+      }
+
+      if (gameType === 'blackjack') {
+        const round = await tx.blackjackRound.findUnique({
+          where: { id: roundId },
+          include: { user: { select: { username: true } } },
+        })
+        if (!round) throw new NotFoundError('Blackjack round not found')
+        if (round.status !== 'ACTIVE') throw new ConflictError('Round is not currently active')
+
+        const payout = Number(round.bet)
+        await tx.blackjackRound.update({
+          where: { id: roundId },
+          data: {
+            status: 'CANCELLED',
+            payout: new Prisma.Decimal(payout),
+          },
+        })
+
+        await wallet.credit(tx, round.userId, new Prisma.Decimal(payout), {
+          type: 'REFUND',
+          roundId,
+        })
+
+        return {
+          success: true,
+          roundId,
+          gameType,
+          username: round.user.username,
+          userId: round.userId,
+          action: 'REFUND',
+          amountPaidOrRefunded: payout,
+          status: 'CANCELLED',
+          reason,
+        }
+      }
+
+      throw new NotFoundError(`Unknown game type: ${gameType}`)
+    })
+  }
+
+  /**
+   * Stop all active rounds across one or all casino games
+   */
+  async stopAllActiveRounds(
+    gameTypeFilter?: AdminGameType | 'ALL',
+    reason = 'Emergency stop by administrator'
+  ) {
+    const active = await this.getAllActiveRounds(gameTypeFilter)
+    const stopped: Array<{ id: string; gameType: AdminGameType; amount: number; username: string }> = []
+    let totalRefunded = 0
+
+    for (const r of active) {
+      try {
+        const res = await this.stopRound(r.gameType, r.id, 'REFUND', reason)
+        stopped.push({
+          id: r.id,
+          gameType: r.gameType,
+          amount: res.amountPaidOrRefunded,
+          username: res.username,
+        })
+        totalRefunded += res.amountPaidOrRefunded
+      } catch (_) {
+        // Round might have resolved in parallel, continue stopping remainder
+      }
+    }
+
+    return {
+      success: true,
+      stoppedCount: stopped.length,
+      totalRefunded: Math.round(totalRefunded * 100) / 100,
+      stopped,
+      reason,
+    }
   }
 }
 
