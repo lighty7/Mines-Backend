@@ -1,12 +1,12 @@
 -- AlterEnum
-ALTER TYPE "GameStatus" ADD VALUE 'PUSH';
-ALTER TYPE "GameStatus" ADD VALUE 'CANCELLED';
+ALTER TYPE "GameStatus" ADD VALUE IF NOT EXISTS 'PUSH';
+ALTER TYPE "GameStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
 
 -- AlterEnum
-ALTER TYPE "TxType" ADD VALUE 'REFUND';
+ALTER TYPE "TxType" ADD VALUE IF NOT EXISTS 'REFUND';
 
 -- CreateTable
-CREATE TABLE "SlotRound" (
+CREATE TABLE IF NOT EXISTS "SlotRound" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "bet" DECIMAL(18,8) NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE "SlotRound" (
 );
 
 -- CreateTable
-CREATE TABLE "RouletteRound" (
+CREATE TABLE IF NOT EXISTS "RouletteRound" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "totalBet" DECIMAL(18,8) NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE "RouletteRound" (
 );
 
 -- CreateTable
-CREATE TABLE "BlackjackRound" (
+CREATE TABLE IF NOT EXISTS "BlackjackRound" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "bet" DECIMAL(18,8) NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE "BlackjackRound" (
 );
 
 -- CreateTable
-CREATE TABLE "CoinFlipRound" (
+CREATE TABLE IF NOT EXISTS "CoinFlipRound" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "bet" DECIMAL(18,8) NOT NULL,
@@ -78,25 +78,41 @@ CREATE TABLE "CoinFlipRound" (
 );
 
 -- CreateIndex
-CREATE INDEX "SlotRound_userId_createdAt_idx" ON "SlotRound"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "SlotRound_userId_createdAt_idx" ON "SlotRound"("userId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "RouletteRound_userId_createdAt_idx" ON "RouletteRound"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "RouletteRound_userId_createdAt_idx" ON "RouletteRound"("userId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "BlackjackRound_userId_createdAt_idx" ON "BlackjackRound"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "BlackjackRound_userId_createdAt_idx" ON "BlackjackRound"("userId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "CoinFlipRound_userId_createdAt_idx" ON "CoinFlipRound"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "CoinFlipRound_userId_createdAt_idx" ON "CoinFlipRound"("userId", "createdAt");
 
 -- AddForeignKey
-ALTER TABLE "SlotRound" ADD CONSTRAINT "SlotRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "SlotRound" ADD CONSTRAINT "SlotRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "RouletteRound" ADD CONSTRAINT "RouletteRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "RouletteRound" ADD CONSTRAINT "RouletteRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "BlackjackRound" ADD CONSTRAINT "BlackjackRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "BlackjackRound" ADD CONSTRAINT "BlackjackRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "CoinFlipRound" ADD CONSTRAINT "CoinFlipRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "CoinFlipRound" ADD CONSTRAINT "CoinFlipRound_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
