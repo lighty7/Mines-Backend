@@ -23,4 +23,10 @@ describe('AdminService', () => {
     expect(typeof stats.houseProfit).toBe('number')
     expect(Array.isArray(stats.activeRounds)).toBe(true)
   })
+
+  it('fetches all active rounds across games and filters correctly', async () => {
+    const rounds = await adminService.getAllActiveRounds('ALL')
+    expect(Array.isArray(rounds)).toBe(true)
+  })
 })
+

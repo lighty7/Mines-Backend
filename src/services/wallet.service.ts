@@ -5,7 +5,7 @@ import { assertNonNegative, assertPositive, requiredDecimal, toDecimal } from '.
 type WalletContext = Prisma.TransactionClient | PrismaClient
 
 export interface WalletEntry {
-  type: 'BET' | 'WIN' | 'DEPOSIT' | 'WITHDRAW'
+  type: 'BET' | 'WIN' | 'DEPOSIT' | 'WITHDRAW' | 'ADMIN_ADJUST' | 'REFUND'
   roundId?: string
   idempotencyKey?: string
 }
