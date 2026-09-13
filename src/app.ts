@@ -8,6 +8,7 @@ import { adminRouter } from './routes/admin.routes'
 import { authRouter } from './routes/auth.routes'
 import { gameRouter } from './routes/game.routes'
 import { leaderboardRouter } from './routes/leaderboard.routes'
+import { blackjackRouter } from './routes/blackjack.routes'
 import { coinFlipRouter } from './routes/coinflip.routes'
 import { rouletteRouter } from './routes/roulette.routes'
 import { slotsRouter } from './routes/slots.routes'
@@ -77,6 +78,7 @@ export function createApp(): Express {
   app.use('/api/slots', gameLimiter, slotsRouter)
   app.use('/api/coinflip', gameLimiter, coinFlipRouter)
   app.use('/api/roulette', gameLimiter, rouletteRouter)
+  app.use('/api/blackjack', gameLimiter, blackjackRouter)
 
   app.use('/api/user', userRouter)
   app.use('/api/leaderboard', leaderboardRouter)
